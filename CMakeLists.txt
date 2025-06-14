@@ -9,8 +9,13 @@ set(DEPS_INSTALL_DIR ${CMAKE_BINARY_DIR}/deps_install)
 ExternalProject_Add(botan_dependency
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/botan
     CONFIGURE_COMMAND python3 <SOURCE_DIR>/configure.py --prefix=${DEPS_INSTALL_DIR} --amalgamation
-    BUILD_COMMAND make -j8
-    INSTALL_COMMAND make install
+
+    BUILD_COMMAND       ${CMAKE_MAKE_PROGRAM} -j8
+    INSTALL_COMMAND     ${CMAKE_MAKE_PROGRAM} install
+
+    LOG_CONFIGURE 1
+    LOG_BUILD     1
+    LOG_INSTALL   1
 )
 
 # define the AURA library as a second external project

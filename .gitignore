@@ -1,0 +1,54 @@
+# ============== #
+# Build Artifacts
+# ============== #
+# Ignore the entire build directory
+/build/
+
+# General compiled files
+*.o
+*.a
+*.so
+*.so.*
+*.dll
+*.lib
+*.exe
+*.ilk
+*.pdb
+*.exp
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+
+
+# ================== #
+# OS Specific Files
+# ================== #
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+
+# ================== #
+# IDE / Editor Files
+# ================== #
+# Visual Studio Code
+.vscode/
+
+# CLion / IntelliJ
+.idea/
+
+# Visual Studio
+*.suo
+*.user
+*.vcxproj.filters
+*.vcxproj.user

@@ -7,7 +7,12 @@ enable_testing()
 add_library(Botan::botan INTERFACE IMPORTED)
 target_include_directories(Botan::botan INTERFACE ${BOTAN_INCLUDE_DIR})
 target_link_directories(Botan::botan INTERFACE ${BOTAN_LIBRARY_DIR})
-target_link_libraries(Botan::botan INTERFACE botan-2)
+
+if(MSVC)
+    target_link_libraries(Botan::botan INTERFACE botan)
+else()
+    target_link_libraries(Botan::botan INTERFACE botan-2)
+endif()
 
 add_library(AURA AURA.cpp)
 

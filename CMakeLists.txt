@@ -21,13 +21,21 @@ if(BOTAN_EXTRA_ARGS)
     message(STATUS "Using extra Botan configure args: ${BOTAN_EXTRA_ARGS}")
 endif()
 
+if(CMAKE_GENERATOR MATCHES "NMake")
+    # NMake does not support -j flag
+    set(BOTAN_BUILD_COMMAND ${CMAKE_MAKE_PROGRAM})
+else()
+    # assume other make tools support -j flag.
+    set(BOTAN_BUILD_COMMAND ${CMAKE_MAKE_PROGRAM} -j8)
+endif()
+
 ExternalProject_Add(botan_dependency
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/botan
 
     CONFIGURE_COMMAND ${PYTHON_EXECUTABLE} <SOURCE_DIR>/configure.py --prefix=${DEPS_INSTALL_DIR} --amalgamation ${BOTAN_EXTRA_ARGS}
 
     # use correct make program for current platform/generator
-    BUILD_COMMAND       ${CMAKE_MAKE_PROGRAM} -j8
+    BUILD_COMMAND       ${CMAKE_MAKE_PROGRAM}
     INSTALL_COMMAND     ${CMAKE_MAKE_PROGRAM} install
 
     LOG_CONFIGURE 1

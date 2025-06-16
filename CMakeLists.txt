@@ -43,6 +43,15 @@ ExternalProject_Add(botan_dependency
     LOG_INSTALL   1
 )
 
+option(AURA_DISABLE_TESTS "Disable the tests for the AURA library" OFF)
+
+if(AURA_DISABLE_TESTS)
+    message(STATUS "AURA tests are disabled by build option.")
+    set(AURA_TEST_COMMAND "")
+else()
+    set(AURA_TEST_COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
+endif()
+
 ExternalProject_Add(aura_library
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src
     # this project depends on the Botan project completing first
@@ -52,5 +61,5 @@ ExternalProject_Add(aura_library
         -DBOTAN_INCLUDE_DIR=${DEPS_INSTALL_DIR}/include/botan-2
         -DBOTAN_LIBRARY_DIR=${DEPS_INSTALL_DIR}/lib
 
-    TEST_COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+    TEST_COMMAND ${AURA_TEST_COMMAND}
 )

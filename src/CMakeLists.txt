@@ -25,6 +25,7 @@ set_target_properties(AURA PROPERTIES CXX_STANDARD 17)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../test/main.cpp)
     add_executable(aura_tester ../test/main.cpp)
     target_link_libraries(aura_tester PRIVATE AURA)
+	set_target_properties(aura_tester PROPERTIES CXX_STANDARD 17)
 
     # add test to CTest so it can run automatically
     add_test(NAME AuraRoundTripTest COMMAND aura_tester)

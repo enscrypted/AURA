@@ -8,16 +8,18 @@ setlocal
 set BUILD_DIR=%~1
 set PROJECT_DIR=%~2
 set CMAKE_GENERATOR=%~3
-set BOTAN_ARGS=%~4
+shift
+shift
+shift
+set CMAKE_EXTRA_ARGS=%*
 
 echo --- Building AURA Dependency ---
 echo --- Build Dir: %BUILD_DIR%
 echo --- Project Dir: %PROJECT_DIR%
 echo --- Generator: %CMAKE_GENERATOR%
-echo --- Botan Args: %BOTAN_ARGS%
 
 :: configure AURA
-cmake -B "%BUILD_DIR%" "%PROJECT_DIR%" -G "%CMAKE_GENERATOR%" -DBOTAN_EXTRA_ARGS="%BOTAN_ARGS%"
+cmake -B "%BUILD_DIR%" -S "%PROJECT_DIR%" -G "%CMAKE_GENERATOR%" %CMAKE_EXTRA_ARGS%
 if %errorlevel% neq 0 (
     echo [ERROR] CMake configuration failed.
     exit /b 1

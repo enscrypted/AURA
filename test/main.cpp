@@ -48,7 +48,7 @@ int main() {
     // 1a. PRE-FLIGHT CHECK: Test the pixel calculation method
     std::cout << "\n--- Testing Pixel Calculation ---" << std::endl;
     size_t required_pixels = AURA_Processor::calculate_required_pixels(original_payload.size());
-    size_t expected_pixels = original_payload.size() + AURA_Processor::AUTH_TAG_SIZE;
+    size_t expected_pixels = original_payload.size() + AURA_Processor::AUTH_TAG_SIZE + AURA_Processor::IV_SIZE;
 
     if (required_pixels != expected_pixels) {
         std::cerr << "FAILURE: calculate_required_pixels() returned " << required_pixels

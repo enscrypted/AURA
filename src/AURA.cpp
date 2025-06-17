@@ -6,6 +6,8 @@
 #include <botan/exceptn.h>
 #include <botan/mem_ops.h>
 #include <botan/hex.h>
+#include <botan/system_rng.h>
+#include <botan/secmem.h>
 #include <algorithm>
 #include <numeric>
 #include <cstring>
@@ -73,13 +75,15 @@ void AURA_Processor::_deriveKeys() {
 std::vector<size_t> AURA_Processor::_generatePixelPath(size_t total_pixels) const {
     std::unique_ptr<Botan::StreamCipher> csp_rng(Botan::StreamCipher::create("ChaCha20"));
     csp_rng->set_key(pixel_selection_key_.data(), pixel_selection_key_.size());
-    
+    std::vector<uint8_t> iv(IV_SIZE, 0);
+    csp_rng->set_iv(iv.data(), iv.size());
+
     std::vector<size_t> path(total_pixels);
     std::iota(path.begin(), path.end(), 0);
-    
+
     // Fisher-Yates shuffle using CSPRNG
     for (size_t i = path.size() - 1; i > 0; --i) {
-        std::vector<uint8_t> buf(sizeof(size_t));
+        std::vector<uint8_t> buf(sizeof(size_t), 0);
         csp_rng->cipher(buf.data(), buf.data(), buf.size());
         size_t j_raw;
         std::memcpy(&j_raw, buf.data(), sizeof(size_t));
@@ -94,9 +98,9 @@ size_t AURA_Processor::calculate_required_pixels(size_t payload_size) {
         return 0;
     }
 
-    // embeds one byte per pixel and requires space for the payload
-    // plus a fixed-size authentication tag.
-    return payload_size + AUTH_TAG_SIZE;
+    // embeds one byte per pixel and requires space for the IV, the payload,
+    // and a fixed-size authentication tag.
+    return IV_SIZE + payload_size + AUTH_TAG_SIZE;
 }
 
 // encrypts payload and embeds it into the image using steganography
@@ -111,7 +115,7 @@ AURA_Result AURA_Processor::encrypt(const std::vector<unsigned char>& payload, A
     }
 
     const size_t total_pixels = image.width * image.height;
-    const size_t required_pixels = payload.size() + AUTH_TAG_SIZE;
+    const size_t required_pixels = IV_SIZE + payload.size() + AUTH_TAG_SIZE;
 
     // check if image is large enough
     if (total_pixels < required_pixels) {
@@ -122,32 +126,40 @@ AURA_Result AURA_Processor::encrypt(const std::vector<unsigned char>& payload, A
         auto pixel_path = _generatePixelPath(total_pixels);
         std::unique_ptr<Botan::StreamCipher> cipher(Botan::StreamCipher::create("ChaCha20"));
         cipher->set_key(encryption_key_.data(), encryption_key_.size());
+        
+        Botan::secure_vector<uint8_t> iv(IV_SIZE);
+        Botan::system_rng().randomize(iv.data(), iv.size());
+        cipher->set_iv(iv.data(), iv.size());
+
+        std::vector<unsigned char> encrypted_payload = payload;
+        cipher->cipher(encrypted_payload.data(), encrypted_payload.data(), encrypted_payload.size());
+
+        std::vector<unsigned char> data_to_embed;
+        data_to_embed.insert(data_to_embed.end(), iv.begin(), iv.end());
+        data_to_embed.insert(data_to_embed.end(), encrypted_payload.begin(), encrypted_payload.end());
 
         std::unique_ptr<Botan::MessageAuthenticationCode> hmac(Botan::MessageAuthenticationCode::create("HMAC(SHA-512)"));
         hmac->set_key(authentication_key_.data(), authentication_key_.size());
 
-        // encrypt and embed payload bytes
-        for (size_t i = 0; i < payload.size(); ++i) {
+        // embed authenticated data (IV + ciphertext)
+        for (size_t i = 0; i < data_to_embed.size(); ++i) {
             size_t pixel_index = pixel_path[i];
             unsigned char* pixel_ptr = image.pixel_data + (pixel_index * 4);
             size_t x = pixel_index % image.width;
             size_t y = pixel_index / image.width;
 
-            unsigned char encrypted_byte = payload[i];
-            cipher->cipher1(&encrypted_byte, 1);
-            
-            // update HMAC with associated data and encrypted byte
+            // update HMAC with associated data and embedded byte
             auto ad = get_associated_data(pixel_ptr, x, y);
             hmac->update(ad.data(), ad.size());
-            hmac->update(&encrypted_byte, 1);
-            
-            embed_byte_in_pixel(encrypted_byte, pixel_ptr);
+            hmac->update(&data_to_embed[i], 1);
+
+            embed_byte_in_pixel(data_to_embed[i], pixel_ptr);
         }
 
         // calculate and embed authentication tag
         auto auth_tag = hmac->final();
         for (size_t i = 0; i < AUTH_TAG_SIZE; ++i) {
-            size_t pixel_index = pixel_path[payload.size() + i];
+            size_t pixel_index = pixel_path[data_to_embed.size() + i];
             unsigned char* pixel_ptr = image.pixel_data + (pixel_index * 4);
             embed_byte_in_pixel(auth_tag[i], pixel_ptr);
         }
@@ -155,7 +167,7 @@ AURA_Result AURA_Processor::encrypt(const std::vector<unsigned char>& payload, A
     } catch (const Botan::Exception&) {
         return AURA_Result::Error_Crypto_Error;
     }
-    
+
     return AURA_Result::Success;
 }
 
@@ -164,7 +176,7 @@ AURA_Result AURA_Processor::decrypt(std::vector<unsigned char>& payload_out, con
     payload_out.clear();
 
     // validate input
-    if (master_key_.size() != KEY_SIZE) { 
+    if (master_key_.size() != KEY_SIZE) {
         return AURA_Result::Error_Invalid_Input;
     }
 
@@ -173,59 +185,74 @@ AURA_Result AURA_Processor::decrypt(std::vector<unsigned char>& payload_out, con
     }
 
     const size_t total_pixels = image.width * image.height;
-    
-    // check if image contains enough data for authentication tag
-    if (total_pixels <= AUTH_TAG_SIZE) {
+
+    // check if image contains enough data for at least an IV and authentication tag
+    if (total_pixels <= IV_SIZE + AUTH_TAG_SIZE) {
         return AURA_Result::Error_Image_Too_Small;
     }
 
     try {
         auto pixel_path = _generatePixelPath(total_pixels);
-        std::unique_ptr<Botan::StreamCipher> cipher(Botan::StreamCipher::create("ChaCha20"));
-        cipher->set_key(encryption_key_.data(), encryption_key_.size());
-        
-        // extract encrypted header to determine payload length
-        std::vector<uint8_t> encrypted_header(sizeof(uint64_t));
-        for(size_t i = 0; i < sizeof(uint64_t); ++i) {
+
+        // extract the IV from the start of the pixel path
+        std::vector<uint8_t> iv(IV_SIZE);
+        for(size_t i = 0; i < IV_SIZE; ++i) {
             size_t pixel_index = pixel_path[i];
             const unsigned char* pixel_ptr = image.pixel_data + (pixel_index * 4);
-            encrypted_header[i] = extract_byte_from_pixel(pixel_ptr);
+            iv[i] = extract_byte_from_pixel(pixel_ptr);
+        }
+
+        std::unique_ptr<Botan::StreamCipher> header_cipher(Botan::StreamCipher::create("ChaCha20"));
+        header_cipher->set_key(encryption_key_.data(), encryption_key_.size());
+        header_cipher->set_iv(iv.data(), iv.size());
+
+        // extract and decrypt header to determine payload length
+        std::vector<uint8_t> decrypted_header(sizeof(uint64_t));
+        for(size_t i = 0; i < sizeof(uint64_t); ++i) {
+            size_t pixel_index = pixel_path[IV_SIZE + i];
+            const unsigned char* pixel_ptr = image.pixel_data + (pixel_index * 4);
+            decrypted_header[i] = extract_byte_from_pixel(pixel_ptr);
         }
         
-        // decrypt header
-        std::vector<uint8_t> decrypted_header = encrypted_header;
-        cipher->cipher(encrypted_header.data(), decrypted_header.data(), decrypted_header.size());
+        header_cipher->cipher(decrypted_header.data(), decrypted_header.data(), decrypted_header.size());
+
+        // reconstruct the 64-bit integer from byte stream
+        // ensures portability between architectures (endianness-safe).
+        uint64_t payload_length_from_header = 0;
+        for(size_t i = 0; i < sizeof(uint64_t); ++i) {
+            payload_length_from_header = (payload_length_from_header << 8) | decrypted_header[i];
+        }
         
-        uint64_t payload_length_from_header;
-        std::memcpy(&payload_length_from_header, decrypted_header.data(), sizeof(uint64_t));
+        size_t total_embedded_data_size = IV_SIZE + payload_length_from_header;
 
         // validate extracted payload length
-        if (payload_length_from_header == 0 || payload_length_from_header > total_pixels - AUTH_TAG_SIZE) {
+        if (payload_length_from_header == 0 || total_embedded_data_size > total_pixels - AUTH_TAG_SIZE) {
             return AURA_Result::Error_Authentication_Failed;
         }
 
         std::unique_ptr<Botan::MessageAuthenticationCode> hmac(Botan::MessageAuthenticationCode::create("HMAC(SHA-512)"));
         hmac->set_key(authentication_key_.data(), authentication_key_.size());
 
-        std::vector<unsigned char> extracted_encrypted_payload(payload_length_from_header);
-        
-        // extract encrypted payload and update HMAC
-        for (size_t i = 0; i < payload_length_from_header; ++i) {
+        std::vector<unsigned char> extracted_embedded_data(total_embedded_data_size);
+
+        // extract all embedded data (IV + ciphertext) and update HMAC
+        for (size_t i = 0; i < total_embedded_data_size; ++i) {
             size_t pixel_index = pixel_path[i];
             const unsigned char* pixel_ptr = image.pixel_data + (pixel_index * 4);
             size_t x = pixel_index % image.width;
             size_t y = pixel_index / image.width;
 
-            extracted_encrypted_payload[i] = extract_byte_from_pixel(pixel_ptr);
+            extracted_embedded_data[i] = extract_byte_from_pixel(pixel_ptr);
+
             auto ad = get_associated_data(pixel_ptr, x, y);
             hmac->update(ad.data(), ad.size());
-            hmac->update(&extracted_encrypted_payload[i], 1);
+            hmac->update(&extracted_embedded_data[i], 1);
         }
-        
+
         // extract authentication tag
         std::vector<unsigned char> extracted_tag(AUTH_TAG_SIZE);
         for (size_t i = 0; i < AUTH_TAG_SIZE; ++i) {
-            size_t pixel_index = pixel_path[payload_length_from_header + i];
+            size_t pixel_index = pixel_path[total_embedded_data_size + i];
             const unsigned char* pixel_ptr = image.pixel_data + (pixel_index * 4);
             extracted_tag[i] = extract_byte_from_pixel(pixel_ptr);
         }
@@ -235,11 +262,14 @@ AURA_Result AURA_Processor::decrypt(std::vector<unsigned char>& payload_out, con
             return AURA_Result::Error_Authentication_Failed;
         }
 
-        cipher->seek(0); // reset cipher state
+        const unsigned char* ciphertext = extracted_embedded_data.data() + IV_SIZE;
         payload_out.resize(payload_length_from_header);
 
-        // decrypt extracted payload
-        cipher->cipher(extracted_encrypted_payload.data(), payload_out.data(), payload_length_from_header);
+        // use a new cipher for the final full decryption
+        std::unique_ptr<Botan::StreamCipher> final_cipher(Botan::StreamCipher::create("ChaCha20"));
+        final_cipher->set_key(encryption_key_.data(), encryption_key_.size());
+        final_cipher->set_iv(iv.data(), iv.size());
+        final_cipher->cipher(ciphertext, payload_out.data(), payload_length_from_header);
 
     } catch (const Botan::Exception&) {
         payload_out.clear();

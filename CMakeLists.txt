@@ -73,9 +73,4 @@ ExternalProject_Add(aura_library
                         ${DEPS_INSTALL_DIR}/include/AURA.h
 
     TEST_COMMAND ${AURA_TEST_COMMAND}
-	
-	INSTALL_BYPRODUCTS
-        ${DEPS_INSTALL_DIR}/lib/$<IF:$<CONFIG:Debug>,AURAd,AURA>.lib
-    BUILD_BYPRODUCTS
-        <BINARY_DIR>/$<CONFIG>/AURA.lib
 )

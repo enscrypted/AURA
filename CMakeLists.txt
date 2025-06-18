@@ -64,6 +64,14 @@ ExternalProject_Add(aura_library
         -DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}
         -DBOTAN_INCLUDE_DIR=${DEPS_INSTALL_DIR}/include/botan-2
         -DBOTAN_LIBRARY_DIR=${DEPS_INSTALL_DIR}/lib
+		
+	BUILD_COMMAND       ${CMAKE_COMMAND} --build <BINARY_DIR> --config $<CONFIG>
+    INSTALL_COMMAND     ${CMAKE_COMMAND} --install <BINARY_DIR> --config $<CONFIG>
 
     TEST_COMMAND ${AURA_TEST_COMMAND}
+	
+	INSTALL_BYPRODUCTS
+        ${DEPS_INSTALL_DIR}/lib/$<IF:$<CONFIG:Debug>,AURAd,AURA>.lib
+    BUILD_BYPRODUCTS
+        <BINARY_DIR>/$<CONFIG>/AURA.lib
 )

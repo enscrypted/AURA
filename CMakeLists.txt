@@ -41,10 +41,6 @@ ExternalProject_Add(botan_dependency
     LOG_CONFIGURE 1
     LOG_BUILD     1
     LOG_INSTALL   1
-	
-	BUILD_BYPRODUCTS
-        <INSTALL_DIR>/lib/$<IF:$<CONFIG:Debug>,botand,botan>.lib
-        <INSTALL_DIR>/lib/$<IF:$<CONFIG:Debug>,botand,botan>-2.lib
 )
 
 option(AURA_DISABLE_TESTS "Disable the tests for the AURA library" OFF)
@@ -64,9 +60,17 @@ ExternalProject_Add(aura_library
         -DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}
         -DBOTAN_INCLUDE_DIR=${DEPS_INSTALL_DIR}/include/botan-2
         -DBOTAN_LIBRARY_DIR=${DEPS_INSTALL_DIR}/lib
+		-DCMAKE_BUILD_TYPE=$<CONFIG>
 		
 	BUILD_COMMAND       ${CMAKE_COMMAND} --build <BINARY_DIR> --config $<CONFIG>
-    INSTALL_COMMAND     ${CMAKE_COMMAND} --install <BINARY_DIR> --config $<CONFIG>
+    
+	INSTALL_COMMAND     ${CMAKE_COMMAND} -E copy_if_different
+                        $<IF:$<CONFIG:Debug>,<BINARY_DIR>/Debug/AURAd.lib,<BINARY_DIR>/Release/AURA.lib>
+                        ${DEPS_INSTALL_DIR}/lib/$<IF:$<CONFIG:Debug>,AURAd.lib,AURA.lib>
+    
+	COMMAND             ${CMAKE_COMMAND} -E copy_if_different
+                        <SOURCE_DIR>/AURA.h
+                        ${DEPS_INSTALL_DIR}/include/AURA.h
 
     TEST_COMMAND ${AURA_TEST_COMMAND}
 	

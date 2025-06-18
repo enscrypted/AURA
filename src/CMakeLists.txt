@@ -22,10 +22,6 @@ target_link_libraries(AURA PUBLIC Botan::botan)
 
 set_target_properties(AURA PROPERTIES CXX_STANDARD 17)
 
-if(MSVC)
-    set_property(TARGET AURA PROPERTY DEBUG_POSTFIX "d")
-endif()
-
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../test/main.cpp)
     add_executable(aura_tester ../test/main.cpp)
     target_link_libraries(aura_tester PRIVATE AURA)
@@ -39,6 +35,5 @@ include(GNUInstallDirs)
 install(TARGETS AURA
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-	CONFIGURATIONS Debug Release RelWithDebInfo MinSizeRel
 )
 install(DIRECTORY ../include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

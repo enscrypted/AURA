@@ -52,6 +52,38 @@ else()
     set(AURA_TEST_COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
 endif()
 
+if(CMAKE_SYSTEM_NAME MATCHES "Windows")
+    set(AURA_LIB_SRC_PATH_DEBUG "<BINARY_DIR>/AURAd.lib")
+    set(AURA_LIB_DST_PATH_DEBUG "${DEPS_INSTALL_DIR}/lib/AURAd.lib")
+    set(AURA_LIB_SRC_PATH_RELEASE "<BINARY_DIR>/AURA.lib")
+    set(AURA_LIB_DST_PATH_RELEASE "${DEPS_INSTALL_DIR}/lib/AURA.lib")
+
+    set(AURA_INSTALL_COMMAND
+        "${CMAKE_COMMAND} -E copy_if_different "
+        "$<IF:$<CONFIG:Debug>,${AURA_LIB_SRC_PATH_DEBUG},${AURA_LIB_SRC_PATH_RELEASE}> "
+        "$<IF:$<CONFIG:Debug>,${AURA_LIB_DST_PATH_DEBUG},${AURA_LIB_DST_PATH_RELEASE}>"
+        " ; " # Command separator
+        "${CMAKE_COMMAND} -E copy_if_different "
+        "${AURA_ROOT_SOURCE_DIR}/include/AURA.h "
+        "${DEPS_INSTALL_DIR}/include/AURA.h"
+    )
+else() # Linux/Unix-like
+    set(AURA_LIB_SRC_PATH_DEBUG "<BINARY_DIR>/libAURAd.a")
+    set(AURA_LIB_DST_PATH_DEBUG "${DEPS_INSTALL_DIR}/lib/libAURAd.a")
+    set(AURA_LIB_SRC_PATH_RELEASE "<BINARY_DIR>/libAURA.a")
+    set(AURA_LIB_DST_PATH_RELEASE "${DEPS_INSTALL_DIR}/lib/libAURA.a")
+
+    set(AURA_INSTALL_COMMAND
+        "${CMAKE_COMMAND} -E copy_if_different "
+        "$<IF:$<CONFIG:Debug>,${AURA_LIB_SRC_PATH_DEBUG},${AURA_LIB_SRC_PATH_RELEASE}> "
+        "$<IF:$<CONFIG:Debug>,${AURA_LIB_DST_PATH_DEBUG},${AURA_LIB_DST_PATH_RELEASE}>"
+        " ; " # Command separator
+        "${CMAKE_COMMAND} -E copy_if_different "
+        "${AURA_ROOT_SOURCE_DIR}/include/AURA.h "
+        "${DEPS_INSTALL_DIR}/include/AURA.h"
+    )
+endif()
+
 ExternalProject_Add(aura_library
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src
     # this project depends on the Botan project completing first
@@ -64,9 +96,7 @@ ExternalProject_Add(aura_library
 		
 	BUILD_COMMAND       ${CMAKE_COMMAND} --build <BINARY_DIR> --config $<CONFIG>
     
-	INSTALL_COMMAND     ${CMAKE_COMMAND} -E copy_if_different
-                        $<IF:$<CONFIG:Debug>,<BINARY_DIR>/AURAd.lib,<BINARY_DIR>/AURA.lib>
-                        ${DEPS_INSTALL_DIR}/lib/$<IF:$<CONFIG:Debug>,AURAd.lib,AURA.lib>
+	INSTALL_COMMAND     ${AURA_INSTALL_COMMAND}
     
 	COMMAND             ${CMAKE_COMMAND} -E copy_if_different
                         ${CMAKE_CURRENT_SOURCE_DIR}/include/AURA.h

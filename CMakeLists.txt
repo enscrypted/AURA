@@ -41,6 +41,10 @@ ExternalProject_Add(botan_dependency
     LOG_CONFIGURE 1
     LOG_BUILD     1
     LOG_INSTALL   1
+	
+	BUILD_BYPRODUCTS
+        <INSTALL_DIR>/lib/$<IF:$<CONFIG:Debug>,botand,botan>.lib
+        <INSTALL_DIR>/lib/$<IF:$<CONFIG:Debug>,botand,botan>-2.lib
 )
 
 option(AURA_DISABLE_TESTS "Disable the tests for the AURA library" OFF)

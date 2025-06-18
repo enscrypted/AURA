@@ -69,7 +69,7 @@ ExternalProject_Add(aura_library
                         ${DEPS_INSTALL_DIR}/lib/$<IF:$<CONFIG:Debug>,AURAd.lib,AURA.lib>
     
 	COMMAND             ${CMAKE_COMMAND} -E copy_if_different
-                        <SOURCE_DIR>/AURA.h
+                        {CMAKE_CURRENT_SOURCE_DIR}/include/AURA.h
                         ${DEPS_INSTALL_DIR}/include/AURA.h
 
     TEST_COMMAND ${AURA_TEST_COMMAND}

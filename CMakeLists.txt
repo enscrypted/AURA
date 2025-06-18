@@ -65,7 +65,7 @@ ExternalProject_Add(aura_library
 	BUILD_COMMAND       ${CMAKE_COMMAND} --build <BINARY_DIR> --config $<CONFIG>
     
 	INSTALL_COMMAND     ${CMAKE_COMMAND} -E copy_if_different
-                        $<IF:$<CONFIG:Debug>,<BINARY_DIR>/Debug/AURAd.lib,<BINARY_DIR>/Release/AURA.lib>
+                        $<IF:$<CONFIG:Debug>,<BINARY_DIR>/AURAd.lib,<BINARY_DIR>/AURA.lib>
                         ${DEPS_INSTALL_DIR}/lib/$<IF:$<CONFIG:Debug>,AURAd.lib,AURA.lib>
     
 	COMMAND             ${CMAKE_COMMAND} -E copy_if_different

@@ -195,71 +195,79 @@ AURA_Result AURA_Processor::decrypt(std::vector<unsigned char>& payload_out, con
         // generate the deterministic pixel sequence
         auto pixel_path = _generatePixelPath(total_pixels);
 
-        // determine maximum possible data size from image capacity
-        const size_t stego_data_size = total_pixels - AUTH_TAG_SIZE;
-        std::vector<unsigned char> extracted_stego_data(stego_data_size);
-        std::vector<unsigned char> extracted_tag(AUTH_TAG_SIZE);
+        // extract the initialization vector from the start of the pixel path
+        std::vector<uint8_t> iv(IV_SIZE);
+        for(size_t i = 0; i < IV_SIZE; ++i) {
+            size_t pixel_index = pixel_path[i];
+            const unsigned char* pixel_ptr = image.pixel_data + (pixel_index * 4);
+            iv[i] = extract_byte_from_pixel(pixel_ptr);
+        }
 
+        // create a cipher to decrypt only the payload's length header
+        std::unique_ptr<Botan::StreamCipher> header_cipher(Botan::StreamCipher::create("ChaCha20"));
+        header_cipher->set_key(encryption_key_.data(), encryption_key_.size());
+        header_cipher->set_iv(iv.data(), iv.size());
+
+        // extract and decrypt the header to determine payload length
+        std::vector<uint8_t> encrypted_header(sizeof(uint64_t));
+        for(size_t i = 0; i < sizeof(uint64_t); ++i) {
+            size_t pixel_index = pixel_path[IV_SIZE + i];
+            const unsigned char* pixel_ptr = image.pixel_data + (pixel_index * 4);
+            encrypted_header[i] = extract_byte_from_pixel(pixel_ptr);
+        }
+        header_cipher->cipher(encrypted_header.data(), encrypted_header.data(), encrypted_header.size());
+
+        // reconstruct the 64-bit length from the decrypted header bytes
+        uint64_t payload_length_from_header = 0;
+        for(size_t i = 0; i < sizeof(uint64_t); ++i) {
+            payload_length_from_header = (payload_length_from_header << 8) | encrypted_header[i];
+        }
+        
+        // critical sanity check to mitigate dos attacks
+        if (payload_length_from_header == 0 || (IV_SIZE + payload_length_from_header + AUTH_TAG_SIZE) > total_pixels) {
+            return AURA_Result::Error_Authentication_Failed;
+        }
+
+        const size_t total_embedded_data_size = IV_SIZE + payload_length_from_header;
+        std::vector<unsigned char> extracted_embedded_data(total_embedded_data_size);
         std::unique_ptr<Botan::MessageAuthenticationCode> hmac(Botan::MessageAuthenticationCode::create("HMAC(SHA-512)"));
         hmac->set_key(authentication_key_.data(), authentication_key_.size());
 
-        // extract all potential steganographic data and update hmac
-        for (size_t i = 0; i < stego_data_size; ++i) {
+        // now extract all embedded data (iv + ciphertext) and update hmac
+        for (size_t i = 0; i < total_embedded_data_size; ++i) {
             size_t pixel_index = pixel_path[i];
             const unsigned char* pixel_ptr = image.pixel_data + (pixel_index * 4);
             size_t x = pixel_index % image.width;
             size_t y = pixel_index / image.width;
 
-            extracted_stego_data[i] = extract_byte_from_pixel(pixel_ptr);
+            extracted_embedded_data[i] = extract_byte_from_pixel(pixel_ptr);
 
             auto ad = get_associated_data(pixel_ptr, x, y);
             hmac->update(ad.data(), ad.size());
-            hmac->update(&extracted_stego_data[i], 1);
+            hmac->update(&extracted_embedded_data[i], 1);
         }
 
-        // extract the authentication tag
+        // extract authentication tag
+        std::vector<unsigned char> extracted_tag(AUTH_TAG_SIZE);
         for (size_t i = 0; i < AUTH_TAG_SIZE; ++i) {
-            size_t pixel_index = pixel_path[stego_data_size + i];
+            size_t pixel_index = pixel_path[total_embedded_data_size + i];
             const unsigned char* pixel_ptr = image.pixel_data + (pixel_index * 4);
             extracted_tag[i] = extract_byte_from_pixel(pixel_ptr);
         }
 
-        // verify the integrity of the data blob before decryption
+        // verify authentication tag
         if (!hmac->verify_mac(extracted_tag.data(), extracted_tag.size())) {
             return AURA_Result::Error_Authentication_Failed;
         }
-
-        // if authenticated, decrypt the verified data
-        if (extracted_stego_data.size() < IV_SIZE) {
-            return AURA_Result::Error_Authentication_Failed;
-        }
-        std::vector<uint8_t> iv(extracted_stego_data.begin(), extracted_stego_data.begin() + IV_SIZE);
-
-        const unsigned char* ciphertext = extracted_stego_data.data() + IV_SIZE;
-        const size_t ciphertext_len = extracted_stego_data.size() - IV_SIZE;
-        std::vector<unsigned char> decrypted_data(ciphertext_len);
+        
+        // if authentication succeeds, assign the now-verified payload
+        const unsigned char* ciphertext = extracted_embedded_data.data() + IV_SIZE;
+        payload_out.resize(payload_length_from_header);
 
         std::unique_ptr<Botan::StreamCipher> final_cipher(Botan::StreamCipher::create("ChaCha20"));
         final_cipher->set_key(encryption_key_.data(), encryption_key_.size());
         final_cipher->set_iv(iv.data(), iv.size());
-        final_cipher->cipher(ciphertext, decrypted_data.data(), ciphertext_len);
-
-        // parse the internal header from the decrypted data to get the true payload size
-        if (decrypted_data.size() < sizeof(uint64_t)) {
-            return AURA_Result::Error_Authentication_Failed;
-        }
-        uint64_t payload_size_from_header = 0;
-        for(size_t i = 0; i < sizeof(uint64_t); ++i) {
-            payload_size_from_header = (payload_size_from_header << 8) | decrypted_data[i];
-        }
-
-        // check that the declared size is valid
-        if (payload_size_from_header > decrypted_data.size()) {
-             return AURA_Result::Error_Authentication_Failed;
-        }
-
-        // trim the payload to its true size
-        payload_out.assign(decrypted_data.begin(), decrypted_data.begin() + payload_size_from_header);
+        final_cipher->cipher(ciphertext, payload_out.data(), payload_length_from_header);
 
     } catch (const Botan::Exception&) {
         payload_out.clear();

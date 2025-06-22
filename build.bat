@@ -37,24 +37,14 @@ if not defined BUILD_CONFIG (
 :: All remaining arguments are CMAKE_EXTRA_ARGS
 set CMAKE_EXTRA_ARGS=%*
 
-:: --- Set the correct C++ Runtime library flag based on the build config ---
-set "CRT_FLAG="
-if /I "%BUILD_CONFIG%" == "Debug" (
-    set "CRT_FLAG=-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDebugDLL"
-) else (
-    set "CRT_FLAG=-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL"
-)
-echo "--- Using CRT Flag: %CRT_FLAG%"
-:: --- End of Fix ---
-
 echo --- Building AURA Dependency ---
 echo --- Build Dir: %BUILD_DIR%
 echo --- Project Dir: %PROJECT_DIR%
 echo --- Generator: %CMAKE_GENERATOR%
 echo --- Build Config: %BUILD_CONFIG%
 
-:: configure AURA, now with the explicit CRT flag
-cmake -B "%BUILD_DIR%" -S "%PROJECT_DIR%" -G "%CMAKE_GENERATOR%" -DCMAKE_BUILD_TYPE=%BUILD_CONFIG% %CRT_FLAG% %CMAKE_EXTRA_ARGS%
+:: configure AURA
+cmake -B "%BUILD_DIR%" -S "%PROJECT_DIR%" -G "%CMAKE_GENERATOR%" -DCMAKE_BUILD_TYPE=%BUILD_CONFIG% %CMAKE_EXTRA_ARGS%
 if %errorlevel% neq 0 (
     echo [ERROR] CMake configuration failed.
     exit /b 1

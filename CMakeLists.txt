@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.15)
 project(AURA_superbuild)
 
+option(AURA_USE_SYSTEM_BOTAN "Use a pre-built Botan library instead of building it." OFF)
+
 include(ExternalProject)
 
 set(DEPS_INSTALL_DIR ${CMAKE_BINARY_DIR}/deps_install)
@@ -29,19 +31,21 @@ else()
     set(BOTAN_BUILD_COMMAND ${CMAKE_MAKE_PROGRAM} -j8)
 endif()
 
-ExternalProject_Add(botan_dependency
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/botan
+if(NOT AURA_USE_SYSTEM_BOTAN)
+    ExternalProject_Add(botan_dependency
+        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/botan
 
-    CONFIGURE_COMMAND ${PYTHON_EXECUTABLE} <SOURCE_DIR>/configure.py --prefix=${DEPS_INSTALL_DIR} --amalgamation ${BOTAN_EXTRA_ARGS}
+        CONFIGURE_COMMAND ${PYTHON_EXECUTABLE} <SOURCE_DIR>/configure.py --prefix=${DEPS_INSTALL_DIR} --amalgamation ${BOTAN_EXTRA_ARGS}
 
-    # use correct make program for current platform/generator
-    BUILD_COMMAND       ${CMAKE_MAKE_PROGRAM}
-    INSTALL_COMMAND     ${CMAKE_MAKE_PROGRAM} install
+        # use correct make program for current platform/generator
+        BUILD_COMMAND       ${CMAKE_MAKE_PROGRAM}
+        INSTALL_COMMAND     ${CMAKE_MAKE_PROGRAM} install
 
-    LOG_CONFIGURE 1
-    LOG_BUILD     1
-    LOG_INSTALL   1
-)
+        LOG_CONFIGURE 1
+        LOG_BUILD     1
+        LOG_INSTALL   1
+    )
+endif()
 
 option(AURA_DISABLE_TESTS "Disable the tests for the AURA library" OFF)
 

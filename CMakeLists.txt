@@ -59,8 +59,9 @@ endif()
 
 ExternalProject_Add(aura_library
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src
-    # this project depends on the Botan project completing first
-    DEPENDS botan_dependency
+    if(NOT AURA_USE_SYSTEM_BOTAN)
+        DEPENDS botan_dependency
+    endif()
     CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}
         -DBOTAN_INCLUDE_DIR=${DEPS_INSTALL_DIR}/include/botan-2

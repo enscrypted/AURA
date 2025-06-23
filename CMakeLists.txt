@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.15)
 project(AURA_superbuild)
 
+set(BOTAN_INCLUDE_DIR "" CACHE PATH "Path to pre-built Botan includes")
+set(BOTAN_LIBRARY_DIR "" CACHE PATH "Path to pre-built Botan libraries")
 option(AURA_USE_SYSTEM_BOTAN "Use a pre-built Botan library instead of building it." OFF)
 
 include(ExternalProject)
